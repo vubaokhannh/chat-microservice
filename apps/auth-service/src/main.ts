@@ -1,9 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { UserServiceModule } from './user-service.module';
+import { AuthServiceModule } from './auth-service.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(UserServiceModule);
+  const app = await NestFactory.create(AuthServiceModule);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -13,6 +13,6 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(process.env.PORT ?? 3001);
+  await app.listen(process.env.PORT ?? 3002);
 }
 bootstrap();
