@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -20,8 +14,9 @@ model User {
   name     String?
   avatar   String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   devices Device[]
   tokens  RefreshToken[]
@@ -29,39 +24,61 @@ model User {
   members      ConversationMember[]
   messages     Message[]
   messageReads MessageRead[]
+
+  sentFriendRequests     FriendRequest[] @relation("FriendRequestSender")
+  receivedFriendRequests FriendRequest[] @relation("FriendRequestReceiver")
+
+  friendships1 Friendship[] @relation("FriendshipUser1")
+  friendships2 Friendship[] @relation("FriendshipUser2")
+
+  blockedUsers UserBlock[] @relation("UserBlocker")
+  blockedBy    UserBlock[] @relation("UserBlocked")
+
+  @@index([email])
 }
 
 model RefreshToken {
   id        String   @id @default(uuid())
-  token     String   @unique
+  tokenHash String
   userId    String
+  deviceId  String?
   expiresAt DateTime
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
+
+  user   User    @relation(fields: [userId], references: [id])
+  device Device? @relation(fields: [deviceId], references: [id])
 
   @@index([userId])
 }
 
 model Device {
-  id        String   @id @default(uuid())
-  userId    String
-  fcmToken  String
-  platform  String?
+  id         String  @id @default(uuid())
+  userId     String
+  fcmToken   String
+  platform   String?
+  deviceName String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
+
+  user   User           @relation(fields: [userId], references: [id])
+  tokens RefreshToken[]
 
   @@unique([userId, fcmToken])
   @@index([userId])
 }
 
 model Conversation {
-  id            String           @id @default(uuid())
-  type          ConversationType
-  title         String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id     String           @id @default(uuid())
+  type   ConversationType
+  title  String?
+  avatar String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   lastMessageId String?
   lastMessageAt DateTime?
 
@@ -77,17 +94,27 @@ enum ConversationType {
 }
 
 model ConversationMember {
-  id             String       @id @default(uuid())
+  id             String @id @default(uuid())
   conversationId String
   userId         String
-  joinedAt       DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-  user           User         @relation(fields: [userId], references: [id])
+
+  role MemberRole @default(MEMBER)
+
+  joinedAt  DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  leftAt    DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
 
   @@unique([conversationId, userId])
-  @@index([userId])
   @@index([conversationId])
+  @@index([userId])
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
 }
 
 model Message {
@@ -100,8 +127,10 @@ model Message {
 
   metadata Json?
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
   conversation Conversation @relation(fields: [conversationId], references: [id])
   sender       User         @relation(fields: [senderId], references: [id])
 
@@ -112,13 +141,14 @@ model Message {
 }
 
 model MessageRead {
-  id        String   @id @default(uuid())
+  id        String @id @default(uuid())
   messageId String
   userId    String
-  readAt    DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  message   Message  @relation(fields: [messageId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+
+  readAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
   @@unique([messageId, userId])
   @@index([userId])
@@ -129,4 +159,58 @@ enum MessageType {
   IMAGE
   FILE
   SYSTEM
+}
+
+model FriendRequest {
+  id         String @id @default(uuid())
+  senderId   String
+  receiverId String
+
+  status FriendRequestStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sender   User @relation("FriendRequestSender", fields: [senderId], references: [id])
+  receiver User @relation("FriendRequestReceiver", fields: [receiverId], references: [id])
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId])
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model Friendship {
+  id String @id @default(uuid())
+
+  user1Id String
+  user2Id String
+
+  createdAt DateTime @default(now())
+
+  user1 User @relation("FriendshipUser1", fields: [user1Id], references: [id])
+  user2 User @relation("FriendshipUser2", fields: [user2Id], references: [id])
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model UserBlock {
+  id String @id @default(uuid())
+
+  blockerId String
+  blockedId String
+
+  createdAt DateTime @default(now())
+
+  blocker User @relation("UserBlocker", fields: [blockerId], references: [id])
+  blocked User @relation("UserBlocked", fields: [blockedId], references: [id])
+
+  @@unique([blockerId, blockedId])
 }
